@@ -1,0 +1,23 @@
+﻿{
+  "Name": "iot",
+  "Type": "Data Stream",
+  "DataSourceType": "IoT Hub",
+  "Sample": null,
+  "EventHubProperties": null,
+  "BlobStorageProperties": null,
+  "IoTHubProperties": {
+    "ConsumerGroupName": "events",
+    "IotHubNamespace": "iothub",
+    "SharedAccessPolicyKey": null,
+    "SharedAccessPolicyName": "iothubowner"
+  },
+  "BlobReferenceProperties": null,
+  "Serialization": {
+    "Encoding": "UTF8",
+    "Type": "Json",
+    "FieldDelimiter": null,
+    "Format": null
+  },
+  "DataSourceCredentialDomain": null,
+  "ScriptType": "Input"
+}

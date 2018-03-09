@@ -1,0 +1,30 @@
+﻿{
+  "Name": "blob",
+  "DataSourceType": "Blob Storage",
+  "EventHubProperties": null,
+  "BlobStorageProperties": {
+    "Container": "telemetry",
+    "DateFormat": "yyyy/MM/dd",
+    "PathPattern": "{date}/{time}",
+    "StorageAccounts": [
+      {
+        "AccountKey": null,
+        "AccountName": "store"
+      }
+    ],
+    "TimeFormat": "HH"
+  },
+  "SQLDatabaseProperties": null,
+  "TableStorageProperties": null,
+  "ServiceBusQueueProperties": null,
+  "ServiceBusTopicProperties": null,
+  "DocumentDbProperties": null,
+  "Serialization": {
+    "Encoding": "UTF8",
+    "Type": "Json",
+    "FieldDelimiter": null,
+    "Format": "LineSeparated"
+  },
+  "DataSourceCredentialDomain": null,
+  "ScriptType": "Output"
+}

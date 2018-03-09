@@ -1,0 +1,29 @@
+﻿{
+  "Name": "reference",
+  "Type": "Reference data",
+  "DataSourceType": "Blob Storage",
+  "Sample": null,
+  "EventHubProperties": null,
+  "BlobStorageProperties": null,
+  "IoTHubProperties": null,
+  "BlobReferenceProperties": {
+    "Container": "machinereference",
+    "DateFormat": "yyyy-MM-dd",
+    "PathPattern": "machine-{date}-{time}.json",
+    "StorageAccounts": [
+      {
+        "AccountKey": null,
+        "AccountName": "store"
+      }
+    ],
+    "TimeFormat": "HH"
+  },
+  "Serialization": {
+    "Encoding": "UTF8",
+    "Type": "Json",
+    "FieldDelimiter": null,
+    "Format": "LineSeparated"
+  },
+  "DataSourceCredentialDomain": "0b4ba929-1554-49a5-8da0-27b7adbc4330.StreamAnalyticsCredential",
+  "ScriptType": "Input"
+}

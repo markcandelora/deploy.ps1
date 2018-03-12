@@ -117,7 +117,7 @@ function Get-ExternalIP() {
     return $returnValue;
 }
 
-function Resolve-ScriptPath($path) {
+function Resolve-ScriptPath($path, [switch]$getContent) {
     $returnValue = $null;
     $parentScriptDir = Split-Path -Path (Get-StackItem -Current | Select-Object -ExpandProperty "Path") -Parent;
     if (Test-Path (Join-Path -Path $parentScriptDir -ChildPath $path)) {
@@ -127,6 +127,11 @@ function Resolve-ScriptPath($path) {
     } else {
         throw [System.ArgumentException] "$path does not exist in current directory, script directory, or as an absolute path.";
     }
+
+    if ($getContent) {
+        $returnValue = "$(Get-Content -Path $returnValue -Raw)";
+    }
+
     return $returnValue;
 }
 

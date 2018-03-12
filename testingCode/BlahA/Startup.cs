@@ -32,7 +32,7 @@ namespace BlahA
             // Add framework services.
             services.AddMvc();
             services.AddSingleton<IConfiguration>(this.Configuration);
-            services.AddSwaggerGen(c => c.SwaggerDoc("blaha", new Info() { })); // .../swagger/blaha/swagger.json
+            services.AddSwaggerGen(c => c.SwaggerDoc("blaha", new Info() { Title = "Blaha", Version = "v1" })); // .../swagger/blaha/swagger.json
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

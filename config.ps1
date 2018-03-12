@@ -15,9 +15,10 @@ return @{
     NameFormat = "deploy{name}asdf";
     Items = @(
         @{ Type = "ResourceGroup"; Name = "test"; Location = "East US"; Resources = @(
-            @{ Type = "ApiManagement"; Name = "api"; Sku = "Developer"; Organization = "marks test"; AdminEmail = "markc@bluemetal.com" };
+            @{ Type = "ApiManagement"; Name = "api"; Sku = "Developer"; Organization = "marks test"; AdminEmail = "markc@bluemetal.com"; 
+               EnableCors = $true; Products = @(@{ ProductName = "Unlimited"; }) };
             @{ Type = "KeyVault"; Name = "vault"; Sku = "Standard"; Secrets = @{ abc = "9n87sdf8b97io" }; };
-            @{ Type = "AppServicePlan"; Name = "svcplan";
+            @{ Type = "AppServicePlan"; Name = "svcplan2";
                 Tier = "Free"; Location = "East US"; AppServices = @(
                     @{ Type = "AppService"; Name = "blahA"; 
                         Code = @{

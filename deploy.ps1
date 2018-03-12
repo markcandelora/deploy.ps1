@@ -118,7 +118,7 @@ function Ensure-Module($name) {
 }
 
 function Load-Modules() {
-    $modules = Get-ChildItem "$PSScriptRoot\modules" | 
+    $modules = Get-ChildItem "$PSScriptRoot\modules" -Filter "*.psm1" | 
                % { [PSCustomObject]@{ Name = [System.IO.Path]::GetFileNameWithoutExtension($_.FullName); Path = $_.FullName; } } | 
                Sort-Object -Property "Name";
     $modules | Select-Object -ExpandProperty "Name" |

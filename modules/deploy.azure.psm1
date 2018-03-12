@@ -15,7 +15,7 @@ $global:armTemplate = @{
 
 function Login-DebugUser() {
     $ErrorActionPreference = "Stop";
-    $pwdFile = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "azure.cred";
+    $pwdFile = Join-Path -Path $PSScriptRoot -ChildPath "azure.cred";
     if (Test-Path $pwdFile) {
         $login = Import-clixml -Path $pwdFile;
     } else {

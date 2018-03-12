@@ -124,35 +124,32 @@ function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $code
     $params.Remove("parent") | Out-Null;
 
     if ($app) {
-        $params = @{
-            Name = $name;
-            ResourceGroupName = $parent.Parent.Name;
-            };
-        if ($appSettings -and $appSettings.Count) { 
-            #wierd workaround for app settings: https://github.com/Azure/azure-powershell/issues/340 (see last comment about values explicitly using ToString)
-            $params["appSettings"] = $appSettings.GetEnumerator() | ConvertTo-Hashtable -KeySelector { $_.Name } -ValueSelector { "$($_.Value)" };
-        }
-        if ($connectionStrings -and $connectionStrings.Count) {
-            $params["connectionStrings"] = $connectionStrings;
-        }
-        if ($params.AppSettings -or $params.ConnectionStrings) {
-            $app = Set-AzureRmWebApp @params;
-        }
+        Write-LogInfo "AppService $name already exists.";
     } else {
+        Write-LogInfo "Creating new AppService $name ...";
         $params = @{
             Name              = $name;
             ResourceGroupName = $parent.Parent.Name;
-            Tier              = $tier;
+            AppServicePlan    = $parent.Name;
             Location          = $parent.Location;
             };
         $app = New-AzureRmWebApp @params;
+    }
 
-        if ($appSettings       -and $appSettings.Count      ) { $params["appSettings"] = $appSettings;             }
-        if ($connectionStrings -and $connectionStrings.Count) { $params["connectionStrings"] = $connectionStrings; }
-        if ($params.AppSettings -or $params.ConnectionStrings) {
-            $params.Remove("location") | Out-Null;
-            $app = Set-AzureRmWebApp @params;
-        }
+    $params = @{
+        Name = $name;
+        ResourceGroupName = $parent.Parent.Name;
+        };
+    if ($appSettings -and $appSettings.Count) { 
+        #wierd workaround for app settings: https://github.com/Azure/azure-powershell/issues/340 (see last comment about values explicitly using ToString)
+        $params["appSettings"] = $appSettings.GetEnumerator() | ConvertTo-Hashtable -KeySelector { $_.Name } -ValueSelector { "$($_.Value)" };
+    }
+    if ($connectionStrings -and $connectionStrings.Count) {
+        $params["connectionStrings"] = $connectionStrings;
+    }
+    if ($params.AppSettings -or $params.ConnectionStrings) {
+        Write-LogInfo "Updating AppService $name settings ...";
+        $app = Set-AzureRmWebApp @params;
     }
 
     if ($code) {

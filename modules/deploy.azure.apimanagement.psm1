@@ -11,7 +11,7 @@ Register-ReferenceIdentifier -Regex "(?<=\[.*)(?<=\`$this\.AddApiMgmtApi\()(?:((
                              -Resolver { param($m, $currentItem, $graph)
                                          $params = $m[0] -split ',' | % { $_.Trim('"',"'") };
                                          return @{ Dependent = Get-DeploymentItem -Type "ApiManagement" -Name $params[0] -Graph $graph; Requisite = $currentItem; } };
-function Deploy-ApiManagement($name, $sku, $adminEmail, $organization, $capacity, $enableCors, $policy, $policyFile, $products, $apis, $parent) {
+function Deploy-ApiManagement($name, $sku, $adminEmail, $organization, $capacity, $enableCors, $policy, $policyFile, $products, $apis, $users, $parent) {
     $params = @{ ResourceGroupName = $parent.Name;
                  Name = $name; }
     $apim = Get-AzureRmApiManagement @params -ErrorAction SilentlyContinue;
@@ -46,8 +46,10 @@ function Deploy-ApiManagement($name, $sku, $adminEmail, $organization, $capacity
         $policy = Set-AzureRmApiManagementPolicy @params;    
     }
 
-    Set-ApiManagementProducts -Products $products -ResourceGroupName $parent.Name -ApiManagementName $name;
-    Set-ApiManagementApis -Apis $apis -ResourceGroupName $parent.Name -ApiManagementName $name;
+    $products = Set-ApiManagementProducts -Products $products -ResourceGroupName $parent.Name -ApiManagementName $name;
+    $apis = Set-ApiManagementApis -Apis $apis -ResourceGroupName $parent.Name -ApiManagementName $name;
+    $users = Set-ApiManagementUsers -Users $users -ResourceGroupName $parent.Name -ApiManagementName $name;
+    return @{ Users = $users; };
 }
 
 function Set-ApiManagementProducts($products, $resourceGroupName, $apiManagementName) {
@@ -59,7 +61,7 @@ function Set-ApiManagementProducts($products, $resourceGroupName, $apiManagement
     }
 
     foreach ($product in $products) {
-        Ensure-ApiManagementProduct @product @PSBoundParameters;
+        Set-ApiManagementProduct @product @PSBoundParameters;
     }
 }
 
@@ -72,11 +74,54 @@ function Set-ApiManagementApis($apis, $resourceGroupName, $apiManagementName) {
     }
 
     foreach ($api in $apis) {
-        Update-ApiManagementApi @api @PSBoundParameters;
+        Set-ApiManagementApi @api @PSBoundParameters;
     }
 }
 
-function Update-ApiManagementApi($resourceGroupName, $apiManagementName, $apiName, $apiHost, $apiPath, $swaggerPath) {
+function Set-ApiManagementUsers($users, $resourceGroupName, $apiManagementName) {
+    $returnValue = @{};
+    $ctx = New-AzureRmApiManagementContext -ResourceGroupName $resourceGroupName -ServiceName $apiManagementName;
+    #$removals = Get-AzureRmApiManagementUser -Context $ctx | ? { $apis.UserName -notcontains $_.UserId; };
+    #foreach ($removal in $removals) {
+    #    Write-LogInfo "Removing User $($removal.Name) ...";
+    #    Remove-AzureRmApiManagementUser -Context $ctx -ApiId $removal.ApiId;
+    #}
+
+    foreach ($user in $users) {
+        $returnValue[$user.Email] = Set-ApiManagementUser @user @PSBoundParameters;
+    }
+    return $returnValue;
+}
+
+function Set-ApiManagementProduct($resourceGroupName, $apiManagementName, $productName, $subscriptionRequired, $approvalRequired, $policy, $policyFile) {
+    $ctx = New-AzureRmApimanagementContext -ResourceGroupName $resourceGroupName -ServiceName $apiManagementName;
+    $product = Get-AzureRmApiManagementProduct -Context $ctx -Title $productName -ErrorAction SilentlyContinue;
+    $params = @{  
+        Context = $ctx;
+        Title = $productName;
+        SubscriptionRequired = $subscriptionRequired;
+        ApprovalRequired = $approvalRequired;
+        };
+    if ($product) {
+        Write-LogInfo "Updating product $productName ...";
+        $product = Set-AzureRmApiManagementProduct @params -ProductId $product.ProductId;
+    } else {
+        Write-LogInfo "Creating new product $productName ...";
+        $product = New-AzureRmApiManagementProduct @params;
+    }
+
+    if ($policy -or $policyFile) {
+        $params = @{
+            Context = $ctx;
+            Policy = if ($policy) { $policy } else { Resolve-ScriptPath -Path $policyFile -GetContent };
+            ProductId = $product.Id;
+            };
+        Write-LogInfo "Setting product policy ...";
+        $policy = Set-AzureRmApiManagementPolicy @params;
+    }
+}
+
+function Set-ApiManagementApi($resourceGroupName, $apiManagementName, $apiName, $apiHost, $apiPath, $swaggerPath) {
     $ctx = New-AzureRmApiManagementContext -ResourceGroupName $resourceGroupName -ServiceName $apiManagementName;
     $api = Get-AzureRmApiManagementApi -Context $ctx -Name $apiName -ErrorAction SilentlyContinue;
     $swaggerUrl = (Join-Url $apiHost $swaggerPath);
@@ -114,30 +159,49 @@ function Update-ApiManagementApi($resourceGroupName, $apiManagementName, $apiNam
     }
 }
 
-function Ensure-ApiManagementProduct($resourceGroupName, $apiManagementName, $productName, $subscriptionRequired, $approvalRequired, $policy, $policyFile) {
-    $ctx = New-AzureRmApimanagementContext -ResourceGroupName $resourceGroupName -ServiceName $apiManagementName;
-    $product = Get-AzureRmApiManagementProduct -Context $ctx -Title $productName -ErrorAction SilentlyContinue;
+function Set-ApiManagementUser($resourceGroupName, $apiManagementName, $email, $password, $firstName, $lastName, $subscriptions) {
+    $returnValue = @{};
+    $ctx = New-AzureRmApiManagementContext -ResourceGroupName $resourceGroupName -ServiceName $apiManagementName;
+    $user = Get-AzureRmApiManagementUser -Context $ctx -ErrorAction SilentlyContinue | ? { $_.Email -eq $email };
     $params = @{  
         Context = $ctx;
-        Title = $productName;
-        SubscriptionRequired = $subscriptionRequired;
-        ApprovalRequired = $approvalRequired;
+        Password = $password
+        Email = $email;
+        FirstName = $firstName;
+        LastName = $lastName;
+        State = [Microsoft.Azure.Commands.ApiManagement.ServiceManagement.Models.PsApiManagementUserState]::Active;
         };
-    if ($product) {
-        Write-LogInfo "Updating product $productName ...";
-        $product = Set-AzureRmApiManagementProduct @params -ProductId $product.ProductId;
+    if (!$user) {
+        Write-LogInfo "Creating new user $email ...";
+        $user = New-AzureRmApiManagementUser @params;
+    } elseif ($user.FirstName -eq "Administrator") {
+        Write-LogInfo "Cannot update administrator user $email ...";
     } else {
-        Write-LogInfo "Creating new product $productName ...";
-        $product = New-AzureRmApiManagementProduct @params;
+        Write-LogInfo "Updating user information for $email ...";
+        Set-AzureRmApiManagementUser @params -UserId $user.UserId | Out-Null;
     }
 
-    if ($policy -or $policyFile) {
-        $params = @{
-            Context = $ctx;
-            Policy = if ($policy) { $policy } else { Resolve-ScriptPath -Path $policyFile -GetContent };
-            ProductId = $product.Id;
-            };
-        Write-LogInfo "Setting product policy ...";
-        $policy = Set-AzureRmApiManagementPolicy @params;
+    $params = @{
+        Context = $ctx;
+        UserId = $user.UserId;
+        };
+    $existingSubscriptions = Get-AzureRmApiManagementSubscription @params;
+    $subsToKeep = $existingSubscriptions | ? { $subscriptions -contains $_.ProductId };
+    $subsToDelete = $existingSubscriptions | ? { $subscriptions -notcontains $_.ProductId };
+    $subsToAdd = $subscriptions | ? { $existingSubscriptions.ProductId -notcontains $_ };
+    foreach ($subscription in $subsToDelete) {
+        Remove-AzureRmApiManagementSubscription -Context $ctx -SubscriptionId $subscription.SubscriptionId | Out-Null;
     }
+    foreach ($subscription in $subsToAdd) {
+        $azureSub = New-AzureRmApiManagementSubscription @params -Name $subscription -ProductId $subscription -State Active;
+        $returnValue[$azureSub.ProductId] = $azureSub;
+    }
+    foreach ($subscription in $subsToKeep) {
+        $returnValue[$subscription.ProductId] = $subscription;
+    }
+
+    return $returnValue;
 }
+
+
+

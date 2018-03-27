@@ -19,6 +19,25 @@ return @{
                Products = @(@{ ProductName = "Unlimited"; });
                Users = @( @{ Email = "markc@bluemetal.com"; Subscriptions = @("Unlimited"); };
                           @{ Email = "mcandelo@gmail.com"; Password = "abcXYZ123!@#"; FirstName = "Mark"; LastName = "Candelora"; Subscriptions = @("Unlimited"); }; ); };
+            @{ Type = "ServiceBus"; Name = "blahsb"; Sku = "standard"; Authrules = @{ abc = "send;listen"; def = "listen" };
+               Items = @( @{ Type = "servicebustopic"; Name = "topica"; Authrules = @{ topicaccess = "listen"; }; };
+                          @{ Type = "servicebusqueue"; Name = "queuea"; Authrules = @{ queueaccess = "send" }; };
+                ); };
+            @{ Type = "IotHub"; Name = "iothub"; Sku = "F1"; Units = 1; EnableFallback = $true;
+               Endpoints = @(
+                    @{ EndPointType     = 'Queue'
+                       ConnectionString = '[$this.Resolve("ResourceGroup-test/ServiceBus-blahsb/ServiceBusQueue-queuea").Access["queueaccess"].PrimaryConnectionString]';
+                       Name             = 'sbq';
+                       ResourceGroup    = '[$this.Resolve("ResourceGroup-test").Name]';
+                       SubscriptionId   = '[(Get-AzureRmContext).Subscription.Id]'; };
+                    );
+               Routes = @( 
+                   @{ Condition = '$body.route = "sbq"';
+                      EndpointNames = @('sbq');
+                      IsEnabled = $true;
+                      Name = 'queue-route';
+                      Source = 'DeviceMessages'; }; 
+                    ); };
             # @{ Type = "KeyVault"; Name = "vault"; Sku = "Standard"; Secrets = @{ abc = "9n87sdf8b97io" }; };
             # @{ Type = "AppServicePlan"; Name = "svcplan2";
             #     Tier = "Free"; Location = "East US"; AppServices = @(
@@ -70,7 +89,6 @@ return @{
             #         @{ Type = "BlobContainer"; Name = "referencedata"; };
             #         )
             #     };
-            # @{ Type = "IotHub"; Name = "iothub"; Sku = "F1"; Units = 1; };
             # @{ Type = "StreamAnalytics"; Name = "stream"; Sku = "Standard";
             #     ProjectPath = ".\testingCode\BlahD\BlahD.asaproj"; 
             #     Depends = @(
@@ -86,10 +104,6 @@ return @{
             #                       DropObjectsNotInSource = $true;
             #                 }; };
             #         ); };
-            # @{ Type = "ServiceBus"; Name = "blahsb"; Sku = "Standard"; AuthRules = @{ Abc = "Send;Listen"; Def = "Listen" };
-            #    Items = @( @{ Type = "ServiceBusTopic"; Name = "topica"; AuthRules = @{ topicaccess = "Listen"; }; };
-            #               @{ Type = "ServiceBusQueue"; Name = "queuea"; AuthRules = @{ queueaccess = "Send" }; };
-            #     ); };
             )};
         );
     };

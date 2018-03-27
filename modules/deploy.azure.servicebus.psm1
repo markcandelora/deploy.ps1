@@ -80,36 +80,10 @@ function Deploy-ServiceBusItem($type, $itemParameters) {
                     % { Invoke-Expression "Get-AzureRmServiceBus$($type)Key -ResourceGroup `$itemParameters.Parent.Parent.Name -NamespaceName `$itemParameters.Parent.Name -$($type)Name `$itemParameters.Name -AuthorizationRuleName `$_.Name"; } |
                     ConvertTo-Hashtable -KeySelector { $_.KeyName };
     $itemProps = @{ Access = $accessKeys; };
-    return $itemProps;    
+    return $itemProps;
 }
 
 function Ensure-ServiceBusNamespaceAuthorizationRule($resourceGroup, $namespaceName, $authRuleName, $rights, $allAuthRules) {
-    <#
-    $params = @{ ResourceGroup = $resourceGroup; 
-                 NamespaceName = $namespaceName;
-                 AuthorizationRuleName = $authRuleName};
-    
-    if ($allAuthRules) {
-        $returnValue = $allAuthRules | ? { $_.Name -eq $authRuleName } | Select-Object -First 1;
-    } else {
-        $returnValue = Get-AzureRmServiceBusNamespaceAuthorizationRule @params;
-    }
-    
-    $params["Rights"] = $rights -split ";";
-    if ($returnValue) {
-        $rights -split ";" | % { $update = ([bool]$update) -or ([bool]($returnValue.Rights -eq $_)) };
-        if ($update) {
-            Write-LogInfo "Updating Authorization Rule $authRuleName";
-            $returnValue = Set-AzureRmServiceBusNamespaceAuthorizationRule @params;
-        } else {
-            Write-LogInfo "Authorization Rule $authRuleName up-to-date";
-        }
-    } else {
-        Write-LogInfo "Updating Authorization Rule $authRuleName";
-        $returnValue = New-AzureRmServiceBusNamespaceAuthorizationRule @params;
-    }
-    return $returnValue;
-    #>
     Ensure-ServiceBusAuthorizationRuleGeneric @PSBoundParameters -ItemType "Namespace";
 }
 

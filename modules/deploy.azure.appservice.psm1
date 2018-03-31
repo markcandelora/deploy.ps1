@@ -118,10 +118,6 @@ function Deploy-AppServicePlan($name, $location, $tier, $parent) {
 
 function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $code, $webJobs, $parent) {
     $app = Get-AzureRmWebApp -ResourceGroupName $parent.Parent.Name -Name $name -ErrorAction SilentlyContinue;
-    $params = $PSBoundParameters;
-    $params["location"] = $parent.Location;
-    $params["resourceGroupName"] = $parent.Parent.Name;
-    $params.Remove("parent") | Out-Null;
 
     if ($app) {
         Write-LogInfo "AppService $name already exists.";
@@ -131,7 +127,7 @@ function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $code
             Name              = $name;
             ResourceGroupName = $parent.Parent.Name;
             AppServicePlan    = $parent.Name;
-            Location          = $parent.Location;
+            Location          = if ($parent.Location) { $parent.Location } else { $parent.Parent.Location };
             };
         $app = New-AzureRmWebApp @params;
     }
@@ -145,7 +141,7 @@ function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $code
         $params["appSettings"] = $appSettings.GetEnumerator() | ConvertTo-Hashtable -KeySelector { $_.Name } -ValueSelector { "$($_.Value)" };
     }
     if ($connectionStrings -and $connectionStrings.Count) {
-        $params["connectionStrings"] = $connectionStrings;
+        $params["connectionStrings"] = $connectionStrings.GetEnumerator() | ConvertTo-Hashtable -KeySelector { $_.Name } -ValueSelector { @{ Type = "Custom"; Value = $_.Value; } };
     }
     if ($params.AppSettings -or $params.ConnectionStrings) {
         Write-LogInfo "Updating AppService $name settings ...";

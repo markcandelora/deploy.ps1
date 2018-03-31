@@ -64,6 +64,7 @@ function Get-MsBuild {
 
 function Invoke-MsBuild($projectPath, $target, $params, $verbosity) {
     $msbuild = Get-MsBuild;
+    $projectPath = Resolve-ScriptPath -Path $projectPath;
     $buildParams = [System.Collections.Generic.List[object]]::new($params);
     if ($verbosity) {
         $buildParams.Add("/v:$verbosity");
@@ -479,21 +480,11 @@ function Resolve-DeploymentReferenceById($dependency, $item, $graph) {
         $graph = (Peek-Stack).Graph;
     }
 
-    $ancestor = $item.Parent;
-    while ($ancestor) { #provide shortcut for referencing parents...
-        if ($ancestor.Id -like "*/$dependency") {
-            $returnValue = $ancestor;
-            $ancestor = $null;
-        } else {
-            $ancestor = $ancestor.Parent;
-        }
+    $returnValue = @($graph | ? { $_.Id -eq $dependency -or $_.Id -like "*/$dependency" });
+    if ($returnValue.Length -ne 1) {
+        throw [ArgumentException]"Dependency '$dependency' matched ${$returnValue.Length} items.";
     }
 
-    foreach ($graphItem in $graph) {
-        if ($graphItem.Id -eq $dependency -and !$returnValue) {
-            $returnValue = $graphItem;
-        }
-    }
     return $returnValue;
 }
 

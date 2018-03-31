@@ -9,6 +9,8 @@ $storageAccountActions = @{
     };
 $storageContainerActions = @{
     CreateSASToken = { param($ttlHours) return New-StorageAccountContainerSASToken @this -TTLHours $ttlHours };
+    GetBlobUrl = { param($blobPath) return Join-Url $this.Url.ToString() $blobPath; };
+    ListBlobs = { param($filter) return $this.Connection | Get-AzureStorageBlob -Blob $filter; };
     };
 $blobActions = @{};
 
@@ -43,10 +45,6 @@ function Deploy-BlobContainer($name, $publicAccess, $parent) {
 
     $context = Get-StorageAccountContext -resourceGroupName $resourceGroupName -storageAccountName $storageAccountName;
     $container = Get-AzureStorageContainer -Context $context -Name $name -ErrorAction SilentlyContinue;
-    $permission = [Microsoft.WindowsAzure.Storage.Blob.BlobContainerPermissions]::new();
-    if ($publicAccess) {
-        $permission.PublicAccess = $publicAccess;
-    }
 
     if (!$container) {
         Write-LogInfo "Creating new storage container '$name'";
@@ -54,11 +52,14 @@ function Deploy-BlobContainer($name, $publicAccess, $parent) {
     } else {
         Write-LogInfo "Container '$name' already exists";
     }
-    Write-LogInfo "Setting container permissions";
-    $container.CloudBlobContainer.SetPermissions($permission);
 
+    Write-LogInfo "Setting container permissions";
+    $permission = if ($publicAccess) { "Container" } else { "Off" };
+    $container | Set-AzureStorageContainerAcl -Permission $permission;
+    
     $containerValues = @{
         Url = $container.CloudBlobContainer.Uri;
+        Connection = $container;
         };
     return Join-Hashtable $containerValues $script:storageContainerActions;
 }

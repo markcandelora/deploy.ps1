@@ -54,10 +54,21 @@ function Deploy-AppServiceCodeMSBuild($projectPath, $resourceGroupName, $appServ
     $userName = $prof.userName;
     $password = $prof.userPWD;
     $deployUrl = $prof.publishUrl
-    $params = @("/p:DeployOnBuild=True", "/p:AllowUntrustedCertificate=True",
-                "/p:CreatePackageOnPublish=True", "/p:WebPublishMethod=MSDeploy",
-                "/p:MSDeployPublishMethod=WMSVC", "/p:MSDeployServiceUrl=$deployUrl",
-                "/p:UserName=$userName", "/p:Password=$password",
-                "/p:DeployIisAppPath=$appServiceName", "/p:SkipExtraFilesOnServer=True");
-    Invoke-MSBuild -ProjectPath $projectPath -Target "Build" -Params $params;
+    $params = [Xml]"<Project ToolsVersion='4.0' xmlns='http://schemas.microsoft.com/developer/msbuild/2003'><PropertyGroup>
+                <DeployOnBuild>True</DeployOnBuild>
+                <AllowUntrustedCertificate>True</AllowUntrustedCertificate>
+                <CreatePackageOnPublish>True</CreatePackageOnPublish>
+                <WebPublishMethod>MSDeploy</WebPublishMethod>
+                <PublishProvider>AzureWebSite</PublishProvider>
+                <MSDeployPublishMethod>WMSVC</MSDeployPublishMethod>
+                <MSDeployServiceUrl>$deployUrl</MSDeployServiceUrl>
+                <DeployIisAppPath>$appServiceName</DeployIisAppPath>
+                <UserName>$userName</UserName>
+                <Password>$password</Password>
+                <SkipExtraFilesOnServer>True</SkipExtraFilesOnServer>
+               </PropertyGroup></Project>";
+    $publishProfile = Join-Path -Path (Split-Path -Path $projectPath -Parent) -ChildPath "properties/PublishProfiles/deploy.pubxml";
+    $params.Save($publishProfile);
+    $cmdLineArgs = @( '/p:PublishProfile=deploy.pubxml' );
+    Invoke-MSBuild -ProjectPath $projectPath -Target 'Build' -Params $cmdLineArgs -Verbosity "minimal";
 }

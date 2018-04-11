@@ -189,9 +189,8 @@ function Deploy-SqlDatabaseCode($projectPath, $connectionString, $deployParams, 
         </PropertyGroup>
         </Project>';
     $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new($connectionString);
-    # $deployParams["TargetConnectionString"] = $connectionString;
-    # $deployParams["TargetDatabase"] = $builder.InitialCatalog;
-    # $deployParams["TargetDatabaseName"] = $builder.InitialCatalog;
+    $deployParams["TargetConnectionString"] = $connectionString;
+    $deployParams["TargetDatabaseName"] = $builder.InitialCatalog;
     $deployParams["DeployScriptFileName"] = [System.IO.Path]::GetFileNameWithoutExtension($projectPath) + ".sql";
     $xmlParams = $deployParams.GetEnumerator() | % { "<$($_.Name)>$([System.Xml.Linq.XText]::new("$($_.Value)"))</$($_.Name)>" };
     $publishProfile = $deployTemplate -replace "{params}", ($xmlParams -join "");
@@ -202,15 +201,17 @@ function Deploy-SqlDatabaseCode($projectPath, $connectionString, $deployParams, 
     ([xml]$publishProfile).Save($publishProfilePath);
     $publishProfilePath = Get-Item $publishProfilePath | Select-Object -ExpandProperty "FullName";
 
-    # $params = $deployParams.GetEnumerator() | % { "/p:$($_.Name)=`"$($_.Value)`"" };
-    # Invoke-MsBuild -ProjectPath $projectPath -Target "Publish" -Params $params -Verbosity $verbosity;
-
     $buildParams = @(
-        "/p:SqlPublishProfilePath=`"$publishProfilePath`"";
-        "/p:TargetConnectionString=`"$connectionString`"";
-        "/p:TargetDatabase=`"$($builder.InitialCatalog)`"";
+        "/p:SqlPublishProfilePath=""$publishProfilePath""";
+        "/p:TargetConnectionString=""$connectionString""";
+        "/p:TargetDatabase=""$($builder.InitialCatalog)""";
+        "/p:TargetServer=""$($builder.DataSource)""";
+        "/p:TargetUsername=""$($builder.UserID)""";
+        "/p:TargetPassword=""$($builder.Password)""";
+        "/p:GenerateSqlPackage=True";
+        "/p:PublishToDatabase=True";
         );
-    Invoke-MsBuild -ProjectPath $projectPath -Target "Clean;Build;Publish" -Params $buildParams -Verbosity $verbosity;
+    Invoke-MsBuild -ProjectPath $projectPath -Target "Build;Publish" -Params $buildParams -Verbosity $verbosity;
     Remove-Item $publishProfilePath;
 }
 

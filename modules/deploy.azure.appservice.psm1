@@ -1,3 +1,6 @@
+USING NAMESPACE System.Collections.Generic;
+USING NAMESPACE Microsoft.Azure.Management.WebSites.Models;
+
 Ensure-Module ".\modules\deploy.azure.psm1";
 
 Register-AzureProvider "Microsoft.Web";
@@ -116,43 +119,53 @@ function Deploy-AppServicePlan($name, $location, $tier, $parent) {
     return Join-Hashtable @{} $script:appServicePlanActions;
 }
 
-function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $code, $webJobs, $parent) {
-    $app = Get-AzureRmWebApp -ResourceGroupName $parent.Parent.Name -Name $name -ErrorAction SilentlyContinue;
+function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $virtualDirectories, $code, $webJobs, $parent) {
+    $baseParams = @{
+        Name = $name;
+        ResourceGroupName = $parent.Parent.Name;
+        };
+    $app = Get-AzureRmWebApp @baseParams -ErrorAction SilentlyContinue;
 
     if ($app) {
         Write-LogInfo "AppService $name already exists.";
     } else {
         Write-LogInfo "Creating new AppService $name ...";
-        $params = @{
-            Name              = $name;
-            ResourceGroupName = $parent.Parent.Name;
+        $params = Join-Hashtable -Source (Clone-Object $baseParams) -Other @{
             AppServicePlan    = $parent.Name;
             Location          = if ($parent.Location) { $parent.Location } else { $parent.Parent.Location };
             };
         $app = New-AzureRmWebApp @params;
     }
 
-    $params = @{
-        Name = $name;
-        ResourceGroupName = $parent.Parent.Name;
-        };
+    $update = $false;
     if ($appSettings -and $appSettings.Count) { 
         #wierd workaround for app settings: https://github.com/Azure/azure-powershell/issues/340 (see last comment about values explicitly using ToString)
-        $params["appSettings"] = $appSettings.GetEnumerator() | ConvertTo-Hashtable -KeySelector { $_.Name } -ValueSelector { "$($_.Value)" };
+        $app.SiteConfig.AppSettings = [List[NameValuePair]]($appSettings.GetEnumerator() | % { [NameValuePair]::new($_.Name, "$($_.Value)") });
+        $update = $true;
     }
     if ($connectionStrings -and $connectionStrings.Count) {
-        $params["connectionStrings"] = $connectionStrings.GetEnumerator() | ConvertTo-Hashtable -KeySelector { $_.Name } -ValueSelector { @{ Type = "Custom"; Value = $_.Value; } };
+        $app.SiteConfig.ConnectionStrings = [List[ConnStringInfo]]($connectionStrings.GetEnumerator() | % { [ConnStringInfo]::new("Custom", $_.Name, "$($_.Value)") });
+        $update = $true;
     }
-    if ($params.AppSettings -or $params.ConnectionStrings) {
+    if ($virtualDirectories -and $virtualDirectories.Count) {
+        # we don't currently support multiple virtual applications under a single app service...
+        $vapp = $app.SiteConfig.VirtualApplications | ? { $_.VirtualPath -eq '/' } | Select-Object -First 1;
+        $vapp.VirtualDirectories = [List[VirtualDirectory]]($virtualDirectories.GetEnumerator() | % { [VirtualDirectory]::new($_.Name, "$($_.Value)") });
+        $update = $true;
+    }
+    if ($update) {
         Write-LogInfo "Updating AppService $name settings ...";
-        $app = Set-AzureRmWebApp @params;
+        $app = Set-AzureRmWebApp -WebApp $app;
     }
 
     if ($code) {
-        Deploy-AppServiceCode @code -ResourceGroupName $parent.Parent.Name -AppServiceName $name;
+        $params = Join-Hashtable @{ AppServiceName = $name } $baseParams;
+        Write-LogInfo "Deploying web application to $name ...";
+        Deploy-AppServiceCode @code @params $name;
     }
 
     foreach ($webJob in $webJobs) {
+        Write-LogInfo "Deploying webjob application to $name ...";
         Deploy-AppServiceWebJob @webJob -ResourceGroupName $parent.Parent.Name -AppServiceName $name;
     }
 

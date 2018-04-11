@@ -139,3 +139,7 @@ function Deploy-AzureResource([Hashtable]$resource, [string]$resourceGroupName) 
     $deployment = New-AzureRmResourceGroupDeployment -Name $deploymentName -ResourceGroupName $resourceGroupName -Mode Incremental -TemplateFile $templateFile;
     Remove-Item -Path $templateFile;
 }
+
+if (!(Get-AzureRmContext).Account) {
+    [Console]::WriteLine('Cannot continue without authenticating to Azure.  Please run Login-DebugUser for debugging & local execution or Login-AzureRmAccount for execution as a service account.');
+}

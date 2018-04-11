@@ -1,4 +1,5 @@
 USING MODULE ".\modules\deploy.utility.psm1";
+USING MODULE ".\modules\deploy.logging.psm1";
 
 PARAM (
     [string]$configFile = "$PSScriptRoot\config.ps1",
@@ -88,18 +89,8 @@ class Deployment {
             };
     }
 
-    static [void] EnsureModule($path) {
-        $moduleFile = Split-Path $path -Leaf;
-        $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($moduleFile);
-        $module = Get-Module -Name $moduleName -ErrorAction SilentlyContinue;
-        if (!$module) {
-            Microsoft.PowerShell.Utility\Write-Host "Loading module $moduleName";
-
-            $warnPref = $global:WarningPreference;
-            $WarningPreference = "SilentlyContinue";
-            Invoke-Expression -Command "USING MODULE '$path';" -WarningAction SilentlyContinue;
-            $global:WarningPreference = $warnPref;
-        }
+    static [void] EnsureModule([string]$path, [bool]$force) {
+        Ensure-Module -Name $path -Force:$force;
     }
 }
 
@@ -113,34 +104,37 @@ function Register-ReferenceIdentifier($regex, $resolver) {
     deploy.utility\Register-ReferenceIdentifier @PSBoundParameters;
 }
 
-function Ensure-Module($name) {
-    [Deployment]::EnsureModule($name);
+function Ensure-Module($name, [switch]$force) {
+    $moduleFile = Split-Path $name -Leaf;
+    $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($moduleFile);
+    $module = Get-Module -Name $moduleName -ErrorAction SilentlyContinue;
+    if ($module -and $force) {
+        Remove-Module -Name ([System.IO.Path]::GetFileNameWithoutExtension($name));
+        $module = $null;
+    }
+
+    if (!$module -or $force) {
+        Microsoft.PowerShell.Utility\Write-Host "Loading module $moduleName";
+
+        $warnPref = $global:WarningPreference;
+        $WarningPreference = "SilentlyContinue";
+        Invoke-Expression -Command "USING MODULE '$name';" -WarningAction SilentlyContinue;
+        $global:WarningPreference = $warnPref;
+    }
 }
 
 function Load-Modules() {
+    #do not reload these...
+    $skipReload = @("deploy.logging","deploy.utility");
     $modules = Get-ChildItem "$PSScriptRoot\modules" -Filter "*.psm1" | 
                % { [PSCustomObject]@{ Name = [System.IO.Path]::GetFileNameWithoutExtension($_.FullName); Path = $_.FullName; } } | 
+               ? { $skipReload -notcontains $_.Name } |
                Sort-Object -Property "Name";
-    $modules | Select-Object -ExpandProperty "Name" |
-               % { Remove-Module $_ -Force -ErrorAction SilentlyContinue };
-    $modules | Select-Object -ExpandProperty "Path" | % { [Deployment]::EnsureModule($_) };
+    $modules | Select-Object -ExpandProperty "Path" | % { Ensure-Module -Name $_ -Force };
 }
+Ensure-Module ".\modules\deploy.utility.psm1" -Force;
+Ensure-Module ".\modules\deploy.logging.psm1" -Force;
 
 Load-Modules;
 $deployment = [Deployment]::new($configFile, $configParams);
 $deployment.Start();
-
-<#
-& 'C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin\MSBuild.exe' `
-    '/p:TargetConnectionString="Data Source=deployblahasdf.database.windows.net;Initial Catalog=blaha;User ID=sqlAdmin;Password=Pass@word1"' `
-    '/p:TargetDatabase="deployblahasdf.database.windows.net"' `
-    '/p:TargetServer="blaha"' `
-    '/p:TargetUsername="sqlAdmin"' `
-    '/p:TargetPassword="Pass@word1"' `
-    '/p:SqlPublishProfilePath="C:\git\_internal\Azure Deployment\testingCode\BlahE\deployblahasdf.blaha.publish.xml"' `
-    '/p:GenerateSqlPackage="True"' `
-    '/p:PublishToDatabase="True"' `
-    '/t:Build;Publish' `
-    '".\testingCode\BlahE\BlahE.sqlproj"';
-#>
-

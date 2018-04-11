@@ -79,34 +79,49 @@ function Invoke-MsBuild($projectPath, $target, $params, $verbosity) {
 }
 
 function Exec-Process($exe, $params, $stdOutLogLevel = "INFO") {
-    $outFile = [System.IO.Path]::GetTempFileName();
-    $errorFile = [System.IO.Path]::GetTempFileName();
-    $process = Start-Process -FilePath $exe -ArgumentList $params -RedirectStandardOutput $outFile -PassThru -NoNewWindow;
-    $linesRead = 0;
-    $logOutput = { param($path, $skipLines, $logLevel)
-        $logContent = Get-Content -Path $path | Select-Object -Skip $skipLines;
-        $returnValue = $skipLines + $logContent.Length;
-        if ($logContent) {
-            Write-Log ([string]::Join("`n", $logContent)) -Level $logLevel;
-        }
-        return $returnValue;
-        };
-    while (!$process.WaitForExit(500)) {
-        $linesRead = $logOutput.Invoke($outFile, $linesRead, $stdOutLogLevel)[0];
-    }
-    $logOutput.Invoke($outFile, $linesRead, $stdOutLogLevel) | Out-Null;
-    $logOutput.Invoke($errorFile, 0, "ERROR") | Out-Null;
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new($exe, $params);
+    $startInfo.UseShellExecute = $false;
+    $startInfo.RedirectStandardError = $true;
+    $startInfo.RedirectStandardOutput = $true;
+    $startInfo.CreateNoWindow = $true;
+    $process = [System.Diagnostics.Process]::Start($startInfo);
+
+    #see: https://stackoverflow.com/questions/10262231/obtaining-exitcode-using-start-process-and-waitforexit-instead-of-wait/23797762#23797762
+    $process.Handle | Out-Null; #apparently required to properly retrieve the ExitCode below...
+
+<# this code seems to crash powershell...
+    $process.add_OutputDataReceived({ param($sender, $eventArgs) Write-Log $eventArgs.Data -Level $stdOutLogLevel; });
+    $process.add_ErrorDataReceived({ param($sender, $eventArgs) Write-Log $eventArgs.Data -Level "ERROR"; });
+    $process.BeginOutputReadLine();
+    $process.BeginErrorReadLine();
+
+    while (!$process.HasExited) { Start-Sleep -Milliseconds 500; }
+    $process.WaitForExit();
+    Start-Sleep -Milliseconds 5000;
+#>
+
+    $handler = { Write-Log $EventArgs.Data -Level $event.MessageData; };
+    Register-ObjectEvent -InputObject $process -EventName "ErrorDataReceived" -Action $handler -MessageData "ERROR" | Out-Null;
+    $process.BeginErrorReadLine();
+    Write-Log $process.StandardOutput.ReadToEnd() -Level "INFO";
+
+    while (!$process.HasExited) { Start-Sleep -Milliseconds 500; }
+    Start-Sleep -Milliseconds 500;
+    $process.WaitForExit();
 
     if ($process.ExitCode -gt 0) {
         throw [Exception] "Command $exe exited with code $($process.ExitCode)";
     }
-
-    Remove-Item $outFile;
-    Remove-Item $errorFile;
 }
 #endregion
 
 #region Misc functions...
+function Lock-Object([object]$inputObject, [scriptblock]$scriptBlock) {
+    [System.Threading.Monitor]::Enter($inputObject);
+    . $scriptBlock;
+    [System.Threading.Monitor]::Exit($inputObject);
+}
+
 function Get-ExternalIP() {
     #retry 5 times, if all fail, retry once more and throw the error...
     while ($i++ -lt 5 -and !$returnValue) { 

@@ -1,7 +1,7 @@
 USING NAMESPACE System.Collections.Generic;
 USING NAMESPACE Microsoft.Azure.Management.WebSites.Models;
 
-Ensure-Module ".\modules\deploy.azure.psm1";
+USING MODULE ".\deploy.azure.psm1";
 
 Register-AzureProvider "Microsoft.Web";
 Add-NameFormatType "AppServicePlan";
@@ -120,21 +120,19 @@ function Deploy-AppServicePlan($name, $location, $tier, $parent) {
 }
 
 function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $virtualDirectories, $code, $webJobs, $parent) {
-    $baseParams = @{
-        Name = $name;
-        ResourceGroupName = $parent.Parent.Name;
-        };
+    $baseParams = @{ Name = $name;
+                     ResourceGroupName = $parent.Parent.Name; };
     $app = Get-AzureRmWebApp @baseParams -ErrorAction SilentlyContinue;
 
     if ($app) {
         Write-LogInfo "AppService $name already exists.";
     } else {
         Write-LogInfo "Creating new AppService $name ...";
-        $params = Join-Hashtable -Source (Clone-Object $baseParams) -Other @{
-            AppServicePlan    = $parent.Name;
-            Location          = if ($parent.Location) { $parent.Location } else { $parent.Parent.Location };
-            };
+        $params = @{ AppServicePlan    = $parent.Name;
+                     Location          = if ($parent.Location) { $parent.Location } else { $parent.Parent.Location }; };
+        $params = Join-Hashtable -Source (Clone-Object $baseParams).Result -Other $params;
         $app = New-AzureRmWebApp @params;
+        $app = Get-AzureRmWebApp @baseParams; # this is needed due to some bug with new-ing up a web app does not return SiteConfig properties
     }
 
     $update = $false;
@@ -155,6 +153,7 @@ function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $virt
     }
     if ($update) {
         Write-LogInfo "Updating AppService $name settings ...";
+        $app.SiteConfig.AlwaysOn = $true;
         $app = Set-AzureRmWebApp -WebApp $app;
     }
 
@@ -169,11 +168,9 @@ function Deploy-AppService($name, $tier, $appSettings, $connectionStrings, $virt
         Deploy-AppServiceWebJob @webJob -ResourceGroupName $parent.Parent.Name -AppServiceName $name;
     }
 
-    $appValues = @{ 
-        HostName = $app.DefaultHostName; 
-        AppSettings = $app.SiteConfig.AppSettings;
-        ConnectionStrings = $app.SiteConfig.ConnectionStrings;
-        };
+    $appValues = @{ HostName = $app.DefaultHostName; 
+                    AppSettings = $app.SiteConfig.AppSettings;
+                    ConnectionStrings = $app.SiteConfig.ConnectionStrings; };
     return Join-Hashtable $appValues $script:appServiceActions;
 }
 

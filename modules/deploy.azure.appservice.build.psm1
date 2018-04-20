@@ -9,13 +9,20 @@ function Deploy-AppServiceCode($buildType, $projectPath, $resourceGroupName, $ap
     }
 }
 
-function Deploy-AppServiceWebJob($name, $buildType, $projectPath, $jobType, $resourceGroupName, $appServiceName) {
+function Deploy-AppServiceWebJob($name, $buildType, $projectPath, $jobType, $schedule, $resourceGroupName, $appServiceName) {
     if ($buildType -eq "msbuild") {
         Deploy-AppServiceWebJobMBBuild @PSBoundParameters;
     } elseif ($buildType -eq "powershell") {
         throw [NotImplementedException] "powershell build option has not been implemented";
     } elseif ($buildType -eq "node") {
         throw [NotImplementedException] "node build option has not been implemented";
+    }
+
+    if ($jobType -eq "triggered" -and $schedule) {
+        Write-LogInfo "Setting CRON schedule: $schedule";
+        $body = ConvertTo-Json @{ schedule = $schedule } -Compress;
+        $headers = @{  };
+        Invoke-AzureScmApi -ResourceGroupName $resourceGroupName -AppServiceName $appServiceName -Uri "$($jobType)webjobs/$name/settings" -Headers $headers -Body $body -Method "PUT" -ContentType "application/json" | Out-Null;
     }
 }
 
@@ -32,21 +39,12 @@ function Deploy-AppServiceWebJobMBBuild($name, $projectPath, $jobType, $resource
     Invoke-MSBuild -ProjectPath $projectPath -Target "Build" -Params @( "/p:OutputPath=`"$outPath`"" );
     Compress-Archive -Path $outFiles -DestinationPath $zipPath -Force;
 
-    #Check for web job existence...
-    try {
-        $job = Invoke-AzureScmApi -ResourceGroupName $resourceGroupName -AppServiceName $appServiceName -Uri "$($jobType)webjobs/$name" -Method "GET";
-    } catch { <# Ignore errors... #> }
-
-    #delete job if exists
-    if ($job) {
-        Write-LogInfo "Job exists, deleting...";
-        $response = Invoke-AzureScmApi -ResourceGroupName $resourceGroupName -AppServiceName $appServiceName -Uri "$($jobType)webjobs/$name" -Method "DELETE";
-    }
-
     #Deploy
     Write-LogInfo "Deploying $jobType webjob $name to $appServiceName";
     $headers = @{ "Content-Disposition" = "attachment; filename=$name.zip"; };
     $response = Invoke-AzureScmApi -ResourceGroupName $resourceGroupName -AppServiceName $appServiceName -Uri "$($jobType)webjobs/$name" -Headers $headers -Method "PUT" -InFile $zipPath -ContentType "application/zip";
+
+    Remove-Item $zipPath;
 }
 
 function Deploy-AppServiceCodeMSBuild($projectPath, $resourceGroupName, $appServiceName) {

@@ -22,11 +22,13 @@ function Start-Log($rootPath, $logName, $logLevel = "INFO") {
         $script:logPath = Join-Path -Path $rootPath -ChildPath "$logName-$($script:startTime.ToString("yyy-MM-ddTHH-mm-ss")).log";
         $script:logStarted = $true;
         Set-LogLevel $logLevel;
-        if (Test-Path $script:logPath) {
+        if (!(Test-Path $rootPath)) {
+            New-Item -Path $rootPath -ItemType Directory;
+        } elseif (Test-Path $script:logPath) {
             Remove-Item $script:logPath;
         }
         Write-LogInternal -content "######################################" -prefix "#";
-        Write-LogInternal -content "Azure Deployment $script:startTime" -prefix "#";
+        Write-LogInternal -content " Azure Deployment $script:startTime" -prefix "#";
         Write-LogInternal -content "######################################" -prefix "#";
     }
 }
@@ -73,14 +75,16 @@ function Write-Log($content, $errorRecord, $level = "INFO") {
 }
 
 function Write-LogInternal($prefix, $content) {
-    $content = Add-CallStackPrefix -message $content -adjustment 4;
+    $content = Add-CallStackPrefix -message $content;
     $content = Add-Prefix -prefix $prefix -message $content;
     
     if ($script:isInteractive) {
         [Console]::Out.WriteLine($content);
     }
 
-    Out-File -FilePath $script:logPath -Append -NoClobber -InputObject $content;
+    if ($script:logPath) {
+        Out-File -FilePath $script:logPath -Append -NoClobber -InputObject $content;
+    }
 }
 
 function Update-ProgressBar($activity, $status, $percent, [double]$completedItems, [double]$totalItems) {

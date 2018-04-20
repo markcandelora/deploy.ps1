@@ -116,6 +116,26 @@ function Exec-Process($exe, $params, $stdOutLogLevel = "INFO") {
 #endregion
 
 #region Misc functions...
+
+function Ensure-Module($name, [switch]$force) {
+    $moduleFile = Split-Path $name -Leaf;
+    $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($moduleFile);
+    $module = Get-Module -Name $moduleName -ErrorAction SilentlyContinue;
+    if ($module -and $force) {
+        Remove-Module -Name ([System.IO.Path]::GetFileNameWithoutExtension($name));
+        $module = $null;
+    }
+
+    if (!$module -or $force) {
+        Microsoft.PowerShell.Utility\Write-Host "Loading module $moduleName";
+
+        $warnPref = $global:WarningPreference;
+        $WarningPreference = "SilentlyContinue";
+        Invoke-Expression -Command "USING MODULE '$name';" -WarningAction SilentlyContinue;
+        $global:WarningPreference = $warnPref;
+    }
+}
+
 function Lock-Object([object]$inputObject, [scriptblock]$scriptBlock) {
     [System.Threading.Monitor]::Enter($inputObject);
     . $scriptBlock;
@@ -123,12 +143,14 @@ function Lock-Object([object]$inputObject, [scriptblock]$scriptBlock) {
 }
 
 function Get-ExternalIP() {
-    #retry 5 times, if all fail, retry once more and throw the error...
-    while ($i++ -lt 5 -and !$returnValue) { 
-        $returnValue = (Invoke-WebRequest "http://ifconfig.me/ip" -ErrorAction SilentlyContinue).Content.Trim();
+    if (!$returnValue) {
+        $returnValue = Invoke-RestMethod 'http://ipinfo.io/json' | Select-Object -ExpandProperty 'ip';
     }
     if (!$returnValue) {
-        $returnValue = (Invoke-WebRequest "http://ifconfig.me/ip").Content.Trim();            
+        $returnValue = (Invoke-WebRequest 'https://itomation.ca/mypublicip').Content.Trim();
+    }
+    if (!$returnValue) {
+        $returnValue = (Invoke-WebRequest 'http://ifconfig.me/ip').Content.Trim();
     }
     return $returnValue;
 }

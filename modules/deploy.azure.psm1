@@ -1,5 +1,4 @@
-Ensure-Module "AzureRm";
-Ensure-Module "Azure";
+USING MODULE "AzureRm";
 
 $ErrorActionPreference = "Stop";
 
@@ -13,9 +12,10 @@ $global:armTemplate = @{
     }
   
 
-function Login-DebugUser() {
+function Login-DebugUser($name) {
     $ErrorActionPreference = "Stop";
-    $pwdFile = Join-Path -Path $PSScriptRoot -ChildPath "azure.cred";
+    $fileName = if ($name) { "azure.$name.cred" } else { "azure.cred" };
+    $pwdFile = Join-Path -Path $PSScriptRoot -ChildPath $fileName;
     if (Test-Path $pwdFile) {
         $login = Import-clixml -Path $pwdFile;
     } else {
@@ -141,5 +141,12 @@ function Deploy-AzureResource([Hashtable]$resource, [string]$resourceGroupName) 
 }
 
 if (!(Get-AzureRmContext).Account) {
-    [Console]::WriteLine('Cannot continue without authenticating to Azure.  Please run Login-DebugUser for debugging & local execution or Login-AzureRmAccount for execution as a service account.');
+    if (Test-Interactive) {
+        [Console]::WriteLine('Cannot continue without authenticating to Azure. Please enter a profile name to load for authentication (blank for default)');
+        [Console]::Write('> ')
+        $profileName = [Console]::ReadLine();
+        Login-DebugUser -Name $profileName;
+    } else {
+        throw [InvalidOperationException] 'Please ensure an Azure Context is created before running this script by using Login-AzureRmAccount';
+    }
 }

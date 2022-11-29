@@ -12,7 +12,12 @@
 			"upgradePackages": "false",
 			"installOhMyZsh": "true",
 			"nonFreePackages": "true"
-		}
+		},
+		"ghcr.io/devcontainers/features/dotnet:1": {},
+		"ghcr.io/devcontainers/features/azure-cli:1": {
+			"installBicep": true
+		},
+		"ghcr.io/devcontainers/features/docker-from-docker:1": {}
 	},
 
 	"postCreateCommand": "sudo chsh vscode -s \"$(which pwsh)\"",
